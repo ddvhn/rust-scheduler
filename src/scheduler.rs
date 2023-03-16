@@ -21,18 +21,16 @@ impl Scheduler {
                 .unwrap();
             thread_pool.install(move || {
                 rayon::scope(move |s| {
-                    let sleep_duration =
-                        Duration::from_micros(1_000_000 / max_requests_per_sec as u64);
-                    let mut last_received_job_time = Instant::now();
                     println!("did start scope on {:?}", thread::current());
+                    let mut last_received_job_time = Instant::now();
                     loop {
                         if let Ok(job) = job_receiver.recv() {
-                            let elapsed = last_received_job_time.elapsed();
-                            let wait = sleep_duration
-                                .checked_sub(elapsed)
-                                .unwrap_or_else(|| Duration::from_secs(0));
-                            if wait.as_millis() > 0 {
-                                thread::sleep(wait);
+                            let sleep_time = Self::calculate_sleep_time(
+                                last_received_job_time,
+                                max_requests_per_sec as f32,
+                            );
+                            if sleep_time.as_millis() > 0 {
+                                thread::sleep(sleep_time);
                             }
                             last_received_job_time = Instant::now();
                             s.spawn(move |_| {
@@ -48,5 +46,19 @@ impl Scheduler {
 
     pub fn submit(&self, job: Job) {
         self.job_sender.send(job).unwrap();
+    }
+
+    fn calculate_sleep_time(last_update_time: Instant, refill_rate: f32) -> Duration {
+        let elapsed_time = last_update_time.elapsed().as_secs_f32();
+
+        let leak_amount = elapsed_time * refill_rate; // amount leaked from the bucket since last update
+        let bucket_level = 1.0 - leak_amount; // current level of the bucket
+
+        if bucket_level <= 0.0 {
+            Duration::from_secs(0) // bucket has been emptied completely, no need to sleep
+        } else {
+            let refill_time = bucket_level / refill_rate; // time required to refill the bucket to 100%
+            Duration::from_secs_f32(refill_time) // sleep duration required to refill the bucket to 100%
+        }
     }
 }
