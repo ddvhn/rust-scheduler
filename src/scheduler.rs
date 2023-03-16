@@ -28,7 +28,6 @@ impl Scheduler {
                 .unwrap();
             thread_pool.install(move || {
                 rayon::scope(move |s| {
-                    println!("did start scope on {:?}", thread::current());
                     let mut last_received_job_time = Instant::now();
                     loop {
                         if is_terminated_clone.load(Ordering::SeqCst) {
