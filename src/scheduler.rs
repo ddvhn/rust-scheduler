@@ -11,7 +11,7 @@ use rayon::ThreadPoolBuilder;
 use crate::job::Job;
 
 pub struct Scheduler {
-    job_sender: Sender<Job>,
+    job_sender: Arc<Sender<Job>>,
     is_terminated: Arc<AtomicBool>,
     worker_handle: Option<thread::JoinHandle<()>>,
 }
@@ -50,7 +50,7 @@ impl Scheduler {
                 });
             });
         });
-
+        let job_sender = Arc::new(job_sender);
         Self {
             job_sender,
             is_terminated,
