@@ -1,7 +1,7 @@
 use std::sync::mpsc::Sender;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc,
+    mpsc, Arc, Mutex,
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -11,7 +11,7 @@ use rayon::ThreadPoolBuilder;
 use crate::job::Job;
 
 pub struct Scheduler {
-    job_sender: Arc<Sender<Job>>,
+    job_sender: Arc<Mutex<Sender<Job>>>,
     is_terminated: Arc<AtomicBool>,
     worker_handle: Option<thread::JoinHandle<()>>,
 }
@@ -50,7 +50,7 @@ impl Scheduler {
                 });
             });
         });
-        let job_sender = Arc::new(job_sender);
+        let job_sender = Arc::new(Mutex::new(job_sender));
         Self {
             job_sender,
             is_terminated,
@@ -59,7 +59,8 @@ impl Scheduler {
     }
 
     pub fn submit(&self, job: Job) {
-        self.job_sender.send(job).unwrap();
+        let job_sender = self.job_sender.lock().unwrap();
+        job_sender.send(job).unwrap();
     }
 
     pub fn terminate(&mut self) {
